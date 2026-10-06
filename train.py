@@ -52,7 +52,7 @@ if __name__ == "__main__":
     height, width = dataset.get_image_size()
 
     # Initialize other modules
-    print("Initializing modules and running just in time compilation, may take a while... - TEST")
+    print("Initializing modules and running just in time compilation, may take a while...")
     max_error = max(args.match_max_error * width, 1.5)
     min_displacement = max(args.min_displacement * width, 30)
     matcher = Matcher(

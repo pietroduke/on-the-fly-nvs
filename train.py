@@ -55,7 +55,17 @@ if __name__ == "__main__":
     print("Initializing modules and running just in time compilation, may take a while...")
     max_error = max(args.match_max_error * width, 1.5)
     min_displacement = max(args.min_displacement * width, 30)
-    matcher = Matcher(args.fundmat_samples, max_error)
+    matcher = Matcher(
+        args.fundmat_samples,
+        max_error,
+        matcher_type=args.matcher_type,
+        feature_type=args.feature_type,
+        width=width,
+        height=height,
+        min_cossim=args.mnn_min_cossim,
+        keyframe_check_matcher=args.keyframe_check_matcher,
+        lightglue_filter_threshold=args.lightglue_filter_threshold,
+    )
     triangulator = Triangulator(
         args.num_kpts, args.num_prev_keyframes_miniba_incr, max_error
     )
@@ -66,7 +76,13 @@ if __name__ == "__main__":
     dense_extractor = DenseExtractor(width, height)
     depth_estimator = MonoDepthEstimator(width, height)
     scene_model = SceneModel(width, height, args, matcher)
-    detector = Detector(args.num_kpts, width, height)
+    detector = Detector(
+        args.num_kpts,
+        width,
+        height,
+        feature_type=args.feature_type,
+        superpoint_detection_threshold=args.superpoint_detection_threshold,
+    )
 
     # Initialize the viewer
     if args.viewer_mode in ["server", "local"]:

@@ -70,6 +70,18 @@ def get_args():
     # Matching
     parser.add_argument('--num_kpts', type=int, default=int(4096*1.5),
                         help="Number of keypoints to extract from each image")
+    parser.add_argument('--feature_type', choices=['xfeat', 'superpoint'], default='xfeat',
+                        help="Sparse keypoint detector/descriptor used for pose estimation")
+    parser.add_argument('--matcher_type', choices=['mnn', 'lightglue'], default='mnn',
+                        help="Matching algorithm: mutual nearest neighbor on descriptors, or LightGlue (requires --feature_type superpoint)")
+    parser.add_argument('--mnn_min_cossim', type=float, default=-1,
+                        help="Minimum cosine similarity for MNN matching. If negative, uses 0.82 for xfeat and 0.75 for superpoint")
+    parser.add_argument('--keyframe_check_matcher', choices=['mnn', 'same'], default='mnn',
+                        help="Matcher used to rank previous keyframes by number of matches (num_prev_keyframes_check pairs per keyframe). 'mnn' is much faster, 'same' uses --matcher_type")
+    parser.add_argument('--superpoint_detection_threshold', type=float, default=0.0005,
+                        help="SuperPoint keypoint detection threshold")
+    parser.add_argument('--lightglue_filter_threshold', type=float, default=0.1,
+                        help="LightGlue match confidence threshold")
     parser.add_argument('--match_max_error', type=float, default=2e-3,
                         help="Maximum reprojection error for matching keypoints, proportion of the image width. This is used to filter outliers and discard points at triangulation.")
     parser.add_argument('--fundmat_samples', type=int, default=2000,
@@ -135,6 +147,10 @@ def get_args():
                         help="Port of the viewer client, if using server viewer_mode")
 
     args = parser.parse_args()
+
+    ## Validate feature / matcher combination
+    if args.matcher_type == "lightglue" and args.feature_type != "superpoint":
+        parser.error("--matcher_type lightglue requires --feature_type superpoint")
 
     ## Set the output directory if not specified
     if args.model_path == "":

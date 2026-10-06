@@ -86,10 +86,62 @@ class InterpolateSparse2d(nn.Module):
         grid = self.normgrid(pos, H, W).unsqueeze(-2).to(x.dtype)
         x = F.grid_sample(x, grid, mode = self.mode , align_corners = False)
         return x.permute(0,2,3,1).squeeze(-2)
-    
+
+class SuperPointExtractor(nn.Module):
+    """
+    SuperPoint keypoint detector and descriptor (implementation and weights from https://github.com/cvg/LightGlue).
+    Always returns exactly top_k keypoints; missing ones are padded with zero coordinates and zero descriptors
+    so that they are marked as invalid by DescribedKeypoints.
+    """
+    def __init__(self, top_k, detection_threshold=0.0005, nms_radius=4):
+        super().__init__()
+        try:
+            from lightglue import SuperPoint
+        except ImportError as e:
+            raise ImportError(
+                "SuperPoint requires the lightglue package: pip install git+https://github.com/cvg/LightGlue.git"
+            ) from e
+        self.top_k = top_k
+        self.model = SuperPoint(
+            max_num_keypoints=top_k,
+            detection_threshold=detection_threshold,
+            nms_radius=nms_radius,
+        ).eval().cuda()
+
+    @torch.no_grad()
+    def forward(self, image):
+        """
+        Args:
+            image: [3, H, W] RGB image in [0, 1]
+        Returns:
+            kpts: [top_k, 2] keypoints in pixel coordinates (x, y)
+            feats: [top_k, 256] L2-normalized descriptors, zero for padded keypoints
+        """
+        # SuperPoint converts RGB to grayscale internally
+        out = self.model({"image": image[None].float()})
+        kpts = out["keypoints"][0]
+        feats = out["descriptors"][0]
+        n = min(kpts.shape[0], self.top_k)
+
+        kpts_pad = torch.zeros(self.top_k, 2, dtype=torch.float, device=image.device)
+        feats_pad = torch.zeros(self.top_k, feats.shape[-1], dtype=torch.float, device=image.device)
+        kpts_pad[:n] = kpts[:n]
+        feats_pad[:n] = F.normalize(feats[:n], dim=-1)
+        return kpts_pad, feats_pad
+
 class Detector():
     @torch.no_grad()
-    def __init__(self, top_k, width, height):
+    def __init__(self, top_k, width, height, feature_type="xfeat", superpoint_detection_threshold=0.0005):
+        self.feature_type = feature_type
+        if feature_type == "superpoint":
+            print("Loading SuperPoint feature extractor")
+            self.extractor = SuperPointExtractor(top_k, superpoint_detection_threshold)
+            # Warm up
+            self.extractor(torch.rand(3, height, width, device="cuda"))
+            return
+        elif feature_type != "xfeat":
+            raise ValueError(f"Unknown feature type: {feature_type}")
+
         cache_path = f"models/cache/xfeat_{width}_{height}_{top_k}.pt"
         dummy_img = torch.randn(1, 3, height, width).cuda().to(torch.half)
         if os.path.exists(cache_path):
@@ -180,5 +232,7 @@ class Detector():
 
     @torch.no_grad()
     def __call__(self, image):
+        if self.feature_type == "superpoint":
+            return DescribedKeypoints(*self.extractor(image))
         return DescribedKeypoints(*(self.extractor(image[None].half())))
     

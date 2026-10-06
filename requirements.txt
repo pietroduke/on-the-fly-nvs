@@ -2,6 +2,7 @@ plyfile
 tqdm
 opencv-python
 lpips
+lightglue @ git+https://github.com/cvg/LightGlue.git
 submodules/diff-gaussian-rasterization
 submodules/fused-ssim
 submodules/simple-knn
